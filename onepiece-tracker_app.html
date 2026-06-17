@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>One Piece TCG Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f0f13;
+  --surface: #1a1a24;
+  --surface2: #22222f;
+  --surface3: #2a2a3a;
+  --border: rgba(255,255,255,0.08);
+  --text: #f0f0f5;
+  --text-muted: #7a7a8a;
+  --accent: #e8364a;
+  --green: #2ecc71;
+  --orange: #f39c12;
+  --gray: #555566;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  --card-width: 130px; /* Tamaño dinámico controlado por el menú superior */
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Roboto',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;transition:background 0.3s ease}
+
+/* ── Header ── */
+.app-header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:200;box-shadow:0 2px 16px rgba(0,0,0,.5)}
+.app-logo{display:flex;align-items:center;gap:10px;font-weight:900;font-size:18px;letter-spacing:-0.5px}
+.app-logo span{color:var(--accent)}
+.hdr-right{display:flex;gap:8px;align-items:center}
+
+/* ── Zoom Control ── */
+.zoom-container{display:flex;align-items:center;gap:4px;background:var(--surface2);padding:4px 8px;border-radius:var(--radius);border:1px solid var(--border);margin-right:8px}
+.zoom-label{font-size:11px;color:var(--text-muted);font-weight:700;text-transform:uppercase;margin-right:2px}
+
+/* ── Status Indicator ── */
+.sync-status{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);margin-right:8px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--gray)}
+.status-dot.online{background:var(--green)}
+.status-dot.syncing{background:var(--orange);animation:pulse 1s infinite alternate}
+@keyframes pulse{from{opacity:0.4}to{opacity:1}}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 16px;border-radius:var(--radius);border:none;font-family:'Roboto',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#c9283b}
+.btn-secondary{background:var(--surface3);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{background:var(--surface2)}
+.btn-ghost{background:transparent;color:var(--text-muted);border:1px solid var(--border)}.btn-ghost:hover{background:var(--surface2);color:var(--text)}
+.btn-danger{background:#c0392b;color:#fff}.btn-danger:hover{background:#a93226}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-xs{padding:2px 6px;font-size:11px}
+
+/* ── Tabs ── */
+.tabs-wrapper{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:flex-end;gap:4px;overflow-x:auto;scrollbar-width:none}
+.tabs-wrapper::-webkit-scrollbar{display:none}
+.tab-btn{flex-shrink:0;display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border:none;border-radius:var(--radius) var(--radius) 0 0;font-family:'Roboto',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;background:transparent;color:var(--text-muted);border-bottom:2px solid transparent;white-space:nowrap;position:relative}
+.tab-btn.active{color:#fff;font-weight:700}
+.tab-actions{margin-left:4px;display:flex;gap:3px}
+.tab-icon-btn{width:18px;height:18px;border-radius:4px;border:none;background:transparent;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;transition:all .15s;opacity:0}
+.tab-btn:hover .tab-icon-btn,.tab-btn.active .tab-icon-btn{opacity:1}
+.tab-icon-btn:hover{background:rgba(255,255,255,.1);color:var(--text)}
+.tab-new{padding:10px 12px;color:var(--text-muted);font-size:18px;border:none;background:transparent;cursor:pointer;font-family:'Roboto',sans-serif}
+.tab-new:hover{color:var(--text)}
+.tab-colors{display:flex;gap:3px;margin-left:4px}
+.tab-color-dot{width:7px;height:7px;border-radius:50%}
+
+/* ── Main ── */
+.main{padding:24px;max-width:1600px;margin:0 auto}
+
+/* ── Layout Superior (Líder Izquierda + Métricas Apiladas) ── */
+.deck-top-layout {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 24px;
+  align-items: stretch;
+}
+.leader-sidebar-box {
+  display: flex;
+  flex-direction: column;
+}
+.summary-metrics-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 280px; /* Ocupa solo el espacio necesario */
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .deck-top-layout {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .summary-metrics-box {
+    width: 100%;
+  }
+}
+
+/* ── Summary Cards ── */
+.summary-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 18px;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:center;height: 100%;min-height: 75px;}
+.summary-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent)}
+.summary-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px}
+.summary-value{font-size:24px;font-weight:900;line-height:1}
+.summary-value.missing{color:var(--accent)}
+.summary-value.count{color:var(--text)}
+.summary-value.count.over{color:#e8364a}
+
+/* ── Casilla de Líder Dinámica (Zoomable) ── */
+.leader-zone{background:rgba(255,255,255,0.02);border:2px dashed var(--border);border-radius:var(--radius-lg);padding:12px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;transition:all 0.2s;width: calc(var(--card-width) + 24px);min-height: calc(var(--card-width) * 1.38 + 24px)}
+.leader-zone.drag-over{border-color:var(--accent);background:rgba(232,54,74,0.05)}
+.leader-empty-msg{text-align:center;color:var(--text-muted);font-size:12px;padding:8px}
+.leader-empty-msg span{display:block;font-size:28px;margin-bottom:4px}
+
+/* ── Section header ── */
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;margin-top:28px;gap:12px;flex-wrap:wrap}
+.section-title{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
+.section-title .badge{background:var(--surface3);border-radius:20px;padding:2px 9px;font-size:12px;font-weight:500;color:var(--text-muted)}
+.toolbar-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.search-wrapper{position:relative}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:12px;pointer-events:none}
+.search-input{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:7px 12px 7px 32px;color:var(--text);font-family:'Roboto',sans-serif;font-size:13px;width:200px;transition:border-color .15s}
+.search-input:focus{outline:none;border-color:var(--accent)}
+
+/* ── Card Grid ── */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--card-width),1fr));gap:12px}
+.card-tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:visible;cursor:pointer;transition:transform .2s cubic-bezier(0.2, 1, 0.3, 1),box-shadow .2s,border-color .2s;position:relative;user-select:none;width:100%}
+
+.card-tile:hover{transform:translateY(-5px);box-shadow:0 12px 30px rgba(0,0,0,.6);border-color:rgba(255,255,255,0.2);z-index:10}
+.card-tile.dragging{opacity:.4;transform:scale(.95)}
+.card-tile.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+
+.card-img-wrap{position:relative;aspect-ratio:0.72;background:var(--surface2);overflow:hidden;border-radius:var(--radius-lg) var(--radius-lg) 0 0}
+.card-img-wrap img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s cubic-bezier(0.2, 1, 0.3, 1)}
+.card-tile:hover .card-img-wrap img {transform:none;}
+
+.card-img-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--text-muted);background:var(--surface2)}
+.card-poss-overlay{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.75);border-radius:6px;padding:2px 6px;font-size:11px;font-weight:700;backdrop-filter:blur(4px)}
+.poss-zero-ov{color:var(--gray)}
+.poss-partial-ov{color:var(--orange)}
+.poss-complete-ov{color:var(--green)}
+.qty-overlay{position:absolute;top:4px;left:4px;background:rgba(0,0,0,.75);border-radius:6px;padding:2px 6px;font-size:11px;font-weight:700;color:var(--text-muted);backdrop-filter:blur(4px)}
+.card-info{padding:7px 8px}
+.card-info-id{font-size:10px;color:var(--text-muted);font-weight:600;margin-bottom:2px;font-family:monospace}
+.card-info-name{font-size:11px;font-weight:600;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.card-poss-row{display:flex;align-items:center;justify-content:space-between;margin-top:5px}
+.poss-mini-btn{width:20px;height:20px;border-radius:5px;border:1px solid var(--border);background:var(--surface3);color:var(--text);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .1s;line-height:1;flex-shrink:0}
+.poss-mini-btn:hover{background:var(--surface2);border-color:var(--accent)}
+.poss-val{font-size:12px;font-weight:700;min-width:18px;text-align:center}
+.poss-zero-v{color:var(--gray)}
+.poss-partial-v{color:var(--orange)}
+.poss-complete-v{color:var(--green)}
+
+/* ── Hover Pop-out Preview (Global) ── */
+.card-hover-preview-pop{position:absolute;bottom:104%;left:50%;transform:translateX(-50%) scale(0.7);width:220px;aspect-ratio:0.72;z-index:999;pointer-events:none;opacity:0;visibility:hidden;transition:all 0.15s cubic-bezier(0.16, 1, 0.3, 1);box-shadow:0 16px 40px rgba(0,0,0,0.8);border-radius:12px;border:2px solid var(--accent);overflow:hidden;background:var(--surface2)}
+.card-hover-preview-pop img{width:100%;height:100%;object-fit:cover}
+.card-tile:hover .card-hover-preview-pop{opacity:1;visibility:visible;transform:translateX(-50%) scale(1)}
+
+/* ── Empty state ── */
+.empty-state{padding:50px 20px;text-align:center;color:var(--text-muted)}
+.empty-icon{font-size:40px;margin-bottom:10px;opacity:.4}
+.empty-title{font-size:15px;font-weight:600;margin-bottom:5px;color:var(--text)}
+.empty-desc{font-size:13px}
+
+/* ── No decks ── */
+.no-decks{padding:80px 24px;text-align:center}
+.no-decks-icon{font-size:64px;margin-bottom:20px;opacity:.3}
+.no-decks-title{font-size:22px;font-weight:700;margin-bottom:8px}
+.no-decks-desc{font-size:14px;color:var(--text-muted);margin-bottom:24px}
+
+/* ── Modal ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .15s}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);width:100%;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,.6);animation:slideUp .2s cubic-bezier(.34,1.56,.64,1);position:relative}
+.modal-lg{max-width:850px;overflow:visible !important}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-header{padding:18px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal-title{font-size:15px;font-weight:700}
+.modal-close{width:28px;height:28px;border-radius:6px;border:none;background:var(--surface3);color:var(--text-muted);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .12s}
+.modal-close:hover{background:var(--surface2);color:var(--text)}
+.modal-body{padding:18px 22px;max-height:75vh;overflow-y:auto}
+.modal-lg .modal-body{overflow:visible !important;max-height:none !important}
+.modal-footer{padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+
+/* ── Forms ── */
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:5px}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;color:var(--text);font-family:'Roboto',sans-serif;font-size:13px;transition:border-color .15s}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--accent)}
+.form-select option{background:var(--surface2)}
+.form-textarea{resize:vertical;min-height:130px;font-size:12px;font-family:monospace}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* ── Leader color picker ── */
+.leader-picker{display:flex;gap:8px;flex-wrap:wrap}
+.leader-color-btn{width:36px;height:36px;border-radius:50%;border:3px solid transparent;cursor:pointer;transition:all .15s;position:relative}
+.leader-color-btn.selected{border-color:#fff;transform:scale(1.15)}
+.leader-color-btn:hover{transform:scale(1.1)}
+.leader-color-btn .check{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;opacity:0}
+.leader-color-btn.selected .check{opacity:1}
+
+/* ── Card detail modal ── */
+.card-detail-wrap{display:grid;grid-template-columns:280px 1fr;gap:24px;align-items:start;position:relative}
+.card-detail-img-box{position:relative;width:100%;transition:z-index 0.2s}
+.card-detail-img-box:hover{z-index:1100}
+.card-detail-img{width:100%;border-radius:12px;border:1px solid var(--border);display:block;transition:transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s;transform-origin:center center}
+.card-detail-img-box:hover .card-detail-img{transform:scale(1.4);box-shadow:0 24px 60px rgba(0,0,0,0.95);position:relative;z-index:1200}
+.card-detail-img-ph{width:100%;aspect-ratio:0.72;background:var(--surface2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:40px;color:var(--text-muted)}
+.card-detail-stats{display:grid;gap:8px}
+.stat-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
+.stat-row:last-child{border-bottom:none}
+.stat-key{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted)}
+.stat-val{font-size:13px;font-weight:600}
+.poss-detail-row{display:flex;align-items:center;gap:10px}
+.poss-detail-btn{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--surface3);color:var(--text);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s}
+.poss-detail-btn:hover{background:var(--surface2);border-color:var(--accent)}
+.poss-detail-val{font-size:18px;font-weight:900;min-width:28px;text-align:center}
+
+/* ── Divider ── */
+.section-divider{height:1px;background:var(--border);margin:28px 0}
+
+/* ── Toast ── */
+.toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;font-size:13px;font-weight:500;animation:toastIn .2s ease-out;box-shadow:var(--shadow)}
+@keyframes toastIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#3a3a50}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-logo">☠️ One Piece <span>TCG</span> Tracker</div>
+  <div class="hdr-right">
+    <div class="sync-status" id="syncStatus">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">MongoDB Connectat</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="openGitHubModal()" style="margin-right: 8px;">⚙ GitHub</button>
+    <div class="zoom-container">
+      <span class="zoom-label">Cartas:</span>
+      <button class="btn btn-ghost btn-xs" onclick="adjustGridZoom(-15)">−</button>
+      <button class="btn btn-ghost btn-xs" onclick="adjustGridZoom(15)">+</button>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="exportData()">⬇ Export</button>
+    <button class="btn btn-ghost btn-sm" onclick="importData()">⬆ Import</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
+  </div>
+</header>
+
+<div class="tabs-wrapper">
+  <div id="tabsList" style="display:flex;align-items:flex-end;gap:4px"></div>
+  <button class="tab-new" onclick="openNewDeckModal()" title="Nuevo mazo">＋</button>
+</div>
+
+<div class="main" id="mainContent"></div>
+
+<div class="toast-container" id="toastContainer"></div>
+<div id="modalContainer"></div>
+
+<script>
+// ═══════════════════════════════════════════
+//  API CONFIG
+// ═══════════════════════════════════════════
+const API_URL = 'http://localhost:3000/api'; // Adreça del teu servidor de Node.js
+
+// ═══════════════════════════════════════════
+//  LEADER COLORS CONFIG
+// ═══════════════════════════════════════════
+const LEADER_COLORS = {
+  red:    { label:'Rojo',     hex:'#e8364a' },
+  blue:   { label:'Azul',     hex:'#3a8fe8' },
+  green:  { label:'Verde',    hex:'#2ecc71' },
+  yellow: { label:'Amarillo', hex:'#f1c40f' },
+  purple: { label:'Lila',     hex:'#9b59b6' },
+  black:  { label:'Negro',    hex:'#8899aa' },
+};
+
+function colorsToTheme(colors) {
+  if (!colors || !colors.length) return { tabColor:'#e8364a', tabBg:'#1a1a24' };
+  const hexes = colors.map(c => LEADER_COLORS[c]?.hex || '#e8364a');
+  const tabColor = hexes[0];
+  const bgMap = {
+    red:'#1f0f0f', blue:'#0d1520', green:'#0d1a0e', yellow:'#1a170a',
+    purple:'#160d1f', black:'#111520'
+  };
+  const tabBg = bgMap[colors[0]] || '#1a1a24';
+  return { tabColor, tabBg };
+}
+
+// ═══════════════════════════════════════════
+//  STATE & GITHUB CONFIG
+// ═══════════════════════════════════════════
+let state = { decks:[], activeDeckId:null, gridZoom:130 };
+let githubConfig = { token: '', owner: '', repo: '', path: '', sha: '' };
+let searchMain = '';
+let searchSide = '';
+let dragSrcId = null;
+let dragSrcSection = null;
+
+// MODIFICAT: Ara envia l'estat a MongoDB
+async function save() { 
+  try {
+    await fetch(`${API_URL}/state`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state)
+    });
+    setSyncStatus('online', 'MongoDB Sincronitzat');
+  } catch (err) {
+    console.error('Error al desar a MongoDB:', err);
+    setSyncStatus('', 'Error en desar a la BD');
+  }
+  syncWithGitHub(); 
+}
+
+// MODIFICAT: Ara carrega l'estat des de MongoDB de forma asíncrona
+async function load() {
+  try {
+    setSyncStatus('syncing', 'Carregant de MongoDB...');
+    const response = await fetch(`${API_URL}/state`);
+    if (response.ok) {
+      const dbState = await response.json();
+      state.decks = dbState.decks || [];
+      state.activeDeckId = dbState.activeDeckId || null;
+      state.gridZoom = dbState.gridZoom || 130;
+      setSyncStatus('online', 'MongoDB Connectat');
+    }
+  } catch (err) {
+    console.error('Error al carregar de MongoDB (usant LocalStorage de backup):', err);
+    setSyncStatus('', 'Error BD (Mode Local)');
+    // Backup en cas que el servidor estigui apagat
+    const raw = localStorage.getItem('op_tracker_v3');
+    if (raw) { try { state = JSON.parse(raw); } catch(e){} }
+  }
+
+  if (!state.gridZoom) state.gridZoom = 130;
+  updateGridZoomStyle();
+
+  const rawGh = localStorage.getItem('op_tracker_gh');
+  if (rawGh) { try { githubConfig = JSON.parse(rawGh); } catch(e){} }
+  
+  render();
+}
+
+function adjustGridZoom(delta) {
+  state.gridZoom = Math.max(90, Math.min(230, state.gridZoom + delta));
+  updateGridZoomStyle();
+  save();
+}
+
+function updateGridZoomStyle() {
+  document.documentElement.style.setProperty('--card-width', state.gridZoom + 'px');
+}
+
+function getActiveDeck() { return state.decks.find(d=>d.id===state.activeDeckId); }
+
+function cardImageUrl(cardId) {
+  const idx = cardId.indexOf('-');
+  if (idx===-1) return '';
+  return `https://static.dotgg.gg/onepiece/card/${cardId}.webp`;
+}
+
+function applyDynamicBackground(deck) {
+  if (!deck || !deck.leaderColors || !deck.leaderColors.length) {
+    document.body.style.background = 'var(--bg)';
+    return;
+  }
+  const colors = deck.leaderColors;
+  
+  const bgColors = {
+    red:    '#350c10',
+    blue:   '#091c36',
+    green:  '#0a2815',
+    yellow: '#261e06',
+    purple: '#1f0833',
+    black:  '#020304'
+  };
+
+  const c1 = bgColors[colors[0]] || '#0f0f13';
+  if (colors.length === 1) {
+    document.body.style.background = `linear-gradient(135deg, ${c1} 0%, #0a0a0d 100%) fixed`;
+  } else {
+    const c2 = bgColors[colors[1]] || '#0f0f13';
+    document.body.style.background = `linear-gradient(135deg, ${c1} 0%, ${c2} 100%) fixed`;
+  }
+}
+
+// ═══════════════════════════════════════════
+//  GITHUB CORE ENGINE
+// ═══════════════════════════════════════════
+function setSyncStatus(status, text) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  if(!dot || !txt) return;
+  dot.className = 'status-dot ' + status;
+  txt.textContent = text;
+}
+
+async function fetchFromGitHub() {
+  if (!githubConfig.token || !githubConfig.owner || !githubConfig.repo || !githubConfig.path) {
+    return;
+  }
+  setSyncStatus('syncing', 'Descarregant de GitHub...');
+  const url = `https://api.github.com/repos/${githubConfig.owner}/${githubConfig.repo}/contents/${githubConfig.path}`;
+  
+  try {
+    const response = await fetch(url, {
+      headers: { 'Authorization': `token ${githubConfig.token}`, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    
+    if (response.status === 200) {
+      const data = await response.json();
+      githubConfig.sha = data.sha;
+      localStorage.setItem('op_tracker_gh', JSON.stringify(githubConfig));
+      
+      const decodedContent = decodeURIComponent(escape(atob(data.content.replace(/\s/g, ''))));
+      const parsedState = JSON.parse(decodedContent);
+      
+      if (parsedState && parsedState.decks) {
+        state = parsedState;
+        updateGridZoomStyle();
+        render();
+        setSyncStatus('online', 'GitHub Sincronitzat');
+        toast('Dades importades des de GitHub ✓');
+      }
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function syncWithGitHub() {
+  if (!githubConfig.token || !githubConfig.owner || !githubConfig.repo || !githubConfig.path) return;
+  
+  const url = `https://api.github.com/repos/${githubConfig.owner}/${githubConfig.repo}/contents/${githubConfig.path}`;
+  const contentStr = JSON.stringify(state, null, 2);
+  const base64Content = btoa(unescape(encodeURIComponent(contentStr)));
+  
+  const bodyData = {
+    message: `Update tracker data: ${new Date().toISOString()}`,
+    content: base64Content
+  };
+  if (githubConfig.sha) bodyData.sha = githubConfig.sha;
+
+  try {
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: { 
+        'Authorization': `token ${githubConfig.token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.github.v3+json'
+      },
+      body: JSON.stringify(bodyData)
+    });
+
+    if (response.status === 200 || response.status === 201) {
+      const data = await response.json();
+      githubConfig.sha = data.content.sha;
+      localStorage.setItem('op_tracker_gh', JSON.stringify(githubConfig));
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function openGitHubModal() {
+  showModal(`
+    <div class="modal-header">
+      <span class="modal-title">Configuració GitHub Sincro</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">GitHub PAT Token</label>
+        <input class="form-input" type="password" id="ghToken" value="${esc(githubConfig.token)}" placeholder="ghp_xxxxxxxxxxxx">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Propietari del Repositori (Username o Org)</label>
+        <input class="form-input" id="ghOwner" value="${esc(githubConfig.owner)}" placeholder="ej: el_teu_usuari">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nom del Repositori</label>
+        <input class="form-input" id="ghRepo" value="${esc(githubConfig.repo)}" placeholder="ej: op-tcg-tracker-data">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ruta del fitxer (.json)</label>
+        <input class="form-input" id="ghPath" value="${esc(githubConfig.path)}" placeholder="ej: data/tracker.json">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel·lar</button>
+      <button class="btn btn-primary" onclick="saveGitHubConfig()">Desar i Sincronitzar</button>
+    </div>
+  `);
+}
+
+function saveGitHubConfig() {
+  githubConfig.token = document.getElementById('ghToken').value.trim();
+  githubConfig.owner = document.getElementById('ghOwner').value.trim();
+  githubConfig.repo = document.getElementById('ghRepo').value.trim();
+  githubConfig.path = document.getElementById('ghPath').value.trim();
+  githubConfig.sha = ''; 
+  
+  localStorage.setItem('op_tracker_gh', JSON.stringify(githubConfig));
+  closeModal();
+  fetchFromGitHub();
+}
+
+// ═══════════════════════════════════════════
+//  RENDER TABS
+// ═══════════════════════════════════════════
+function renderTabs() {
+  const list = document.getElementById('tabsList');
+  list.innerHTML = '';
+  state.decks.forEach(deck => {
+    const isActive = deck.id === state.activeDeckId;
+    const { tabColor, tabBg } = colorsToTheme(deck.leaderColors);
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (isActive ? ' active' : '');
+    if (isActive) {
+      btn.style.background = tabBg;
+      btn.style.color = '#fff';
+      btn.style.borderBottom = `2px solid ${tabColor}`;
+    }
+    const dotsHTML = (deck.leaderColors||[]).map(c =>
+      `<span class="tab-color-dot" style="background:${LEADER_COLORS[c]?.hex||'#aaa'}"></span>`
+    ).join('');
+    btn.innerHTML = `
+      <span class="tab-colors">${dotsHTML}</span>
+      ${esc(deck.name)}
+      <span class="tab-actions">
+        <button class="tab-icon-btn" onclick="event.stopPropagation();openEditDeckModal('${deck.id}')" title="Editar">✏</button>
+        <button class="tab-icon-btn" onclick="event.stopPropagation();confirmDeleteDeck('${deck.id}')" title="Eliminar" style="color:#e8364a">✕</button>
+      </span>`;
+    btn.onclick = () => { state.activeDeckId=deck.id; searchMain=''; searchSide=''; render(); save(); };
+    list.appendChild(btn);
+  });
+}
+
+// ═══════════════════════════════════════════
+//  RENDER MAIN
+// ═══════════════════════════════════════════
+function render() {
+  renderTabs();
+  const deck = getActiveDeck();
+  const main = document.getElementById('mainContent');
+
+  if (!state.decks.length) {
+    main.innerHTML = `<div class="no-decks">
+      <div class="no-decks-icon">🃏</div>
+      <div class="no-decks-title">Sin mazos</div>
+      <div class="no-decks-desc">Crea tu primer mazo para empezar.</div>
+      <button class="btn btn-primary" onclick="openNewDeckModal()">＋ Crear mazo</button>
+    </div>`;
+    document.body.style.background = 'var(--bg)';
+    return;
+  }
+  if (!deck) { state.activeDeckId=state.decks[0].id; render(); save(); return; }
+
+  applyDynamicBackground(deck);
+
+  if(deck.leaderCard === undefined) deck.leaderCard = null;
+
+  const countLeader = deck.leaderCard ? 1 : 0;
+  const totalRequiredCards = deck.cards.reduce((s,c)=>s+(c.quantity||0),0) + countLeader;
+  
+  const mainPossession = deck.cards.reduce((s,c)=>s+(c.inPossession||0),0);
+  const leaderPossession = (deck.leaderCard && deck.leaderCard.inPossession) ? 1 : 0;
+  const totalInPossession = mainPossession + leaderPossession;
+
+  const missingFromTarget = Math.max(0, 51 - totalInPossession);
+  const isOver = totalRequiredCards > 51;
+
+  const colors = deck.leaderColors || [];
+  const color1 = LEADER_COLORS[colors[0]]?.hex || '#e8364a';
+  const color2 = colors[1] ? (LEADER_COLORS[colors[1]]?.hex || '#e8364a') : color1;
+
+  const metric1Accent = isOver ? '#e8364a' : color1;
+  const metric2Accent = color2;
+
+  main.innerHTML = `
+    <div class="deck-top-layout">
+      <div class="leader-sidebar-box">
+        <div class="section-title" style="margin-bottom: 10px;">👑 Carta de Líder</div>
+        <div class="leader-zone" id="leaderSlotZone" ondragover="event.preventDefault();this.classList.add('drag-over');" ondragleave="this.classList.remove('drag-over');" ondrop="handleLeaderDrop(event)">
+          ${renderLeaderCardHTML(deck.leaderCard)}
+        </div>
+      </div>
+      
+      <div class="summary-metrics-box">
+        <div class="summary-card" style="--accent: ${metric1Accent}">
+          <div class="summary-label">Cartas en mazo</div>
+          <div class="summary-value count ${isOver?'over':''}">${totalRequiredCards} <span style="font-size:13px;font-weight:400;color:var(--text-muted)">/ 51</span></div>
+        </div>
+        <div class="summary-card" style="--accent: ${metric2Accent}">
+          <div class="summary-label">Faltan (Mazo)</div>
+          <div class="summary-value missing">${missingFromTarget} <span style="font-size:13px;font-weight:400;color:var(--text-muted)">por conseguir</span></div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 4px;">
+          <button class="btn btn-secondary" onclick="exportToClipboard()" style="flex: 1; justify-content: center;">📋 Copiar Lista</button>
+          <button class="btn btn-secondary" onclick="exportMissingToClipboard()" style="flex: 1; justify-content: center; background: #22222f; border-color: var(--accent);">📋 Copiar Cartes Faltants</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <div class="section-title">
+        🃏 Mazo
+        <span class="badge">${deck.cards.length} tipos · ${deck.cards.reduce((s,c)=>s+(c.quantity||0),0)} cartas</span>
+      </div>
+      <div class="toolbar-right">
+        <div class="search-wrapper">
+          <span class="search-icon">🔍</span>
+          <input class="search-input" placeholder="Buscar..." value="${esc(searchMain)}" oninput="searchMain=this.value;renderGrids()">
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="openBulkModal('main')">📋 Añadir lista</button>
+        <button class="btn btn-primary" onclick="openAddCardModal('main')">＋ Añadir carta</button>
+      </div>
+    </div>
+    <div id="gridMain" class="card-grid"></div>
+
+    <div class="section-divider"></div>
+
+    <div class="section-header">
+      <div class="section-title">
+        📦 Cartas Adicionales
+        <span class="badge">${(deck.sideCards||[]).length} tipos · ${(deck.sideCards||[]).reduce((s,c)=>s+(c.quantity||0),0)} cartas</span>
+      </div>
+      <div class="toolbar-right">
+        <div class="search-wrapper">
+          <span class="search-icon">🔍</span>
+          <input class="search-input" placeholder="Buscar..." value="${esc(searchSide)}" oninput="searchSide=this.value;renderGrids()">
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="openBulkModal('side')">📋 Añadir lista</button>
+        <button class="btn btn-primary" onclick="openAddCardModal('side')">＋ Añadir carta</button>
+      </div>
+    </div>
+    <div id="gridSide" class="card-grid"></div>
+  `;
+
+  renderGrids();
+}
+
+function renderLeaderCardHTML(card) {
+  if (!card) {
+    return `<div class="leader-empty-msg"><span>🃏</span>Arrastra el líder aquí</div>`;
+  }
+  const poss = card.inPossession || 0;
+  const imgUrl = cardImageUrl(card.cardId);
+  let possClass = 'poss-zero-ov';
+  if (poss >= 1) possClass = 'poss-complete-ov';
+
+  return `
+    <div class="card-tile" draggable="true" data-cardid="${esc(card.cardId)}" data-section="leader"
+      onclick="openCardDetail('${esc(card.cardId)}','leader')" style="width: var(--card-width);">
+      <div class="card-img-wrap">
+        <img src="${imgUrl}" alt="${esc(card.cardId)}"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="card-img-placeholder" style="display:none">👑</div>
+        <span class="qty-overlay">×1</span>
+        <span class="card-poss-overlay ${possClass}">${poss}/1</span>
+        <div class="card-hover-preview-pop"><img src="${imgUrl}" onerror="this.style.display='none'"></div>
+      </div>
+      <div class="card-info">
+        <div class="card-info-id">${esc(card.cardId)}</div>
+        <div class="card-info-name">${esc(card.cardName || 'Líder')}</div>
+        <div class="card-poss-row">
+          <button class="poss-mini-btn" onclick="event.stopPropagation();changePoss('${esc(card.cardId)}','leader',-1)">−</button>
+          <span class="poss-val ${poss >= 1 ? 'poss-complete-v' : 'poss-zero-v'}">${poss}</span>
+          <button class="poss-mini-btn" onclick="event.stopPropagation();changePoss('${esc(card.cardId)}','leader',1)">+</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderGrids() {
+  const deck = getActiveDeck();
+  if (!deck) return;
+  renderGrid('gridMain', deck.cards, 'main');
+  renderGrid('gridSide', deck.sideCards||[], 'side');
+  
+  document.querySelectorAll('.card-tile').forEach(tile => attachDragEvents(tile, tile.dataset.section));
+}
+
+function renderGrid(containerId, cards, section) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const q = (section==='main'?searchMain:searchSide).toLowerCase();
+  const filtered = q ? cards.filter(c=>(c.cardId||'').toLowerCase().includes(q)||(c.cardName||'').toLowerCase().includes(q)) : cards;
+
+  if (!filtered.length) {
+    container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <div class="empty-icon">${q?'🔍':'🃏'}</div>
+      <div class="empty-title">${q?'Sin resultados':'Sin cartas'}</div>
+      <div class="empty-desc">${q?'Prueba con otra búsqueda.':'Añade cartas a esta sección.'}</div>
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(card => renderCardTile(card, section)).join('');
+}
+
+function renderCardTile(card, section) {
+  const poss = card.inPossession || 0;
+  const qty = card.quantity || 0;
+  let possClass = 'poss-zero-ov', possValClass='poss-zero-v';
+  if (poss >= qty && qty > 0) { possClass='poss-complete-ov'; possValClass='poss-complete-v'; }
+  else if (poss > 0) { possClass='poss-partial-ov'; possValClass='poss-partial-v'; }
+  const imgUrl = cardImageUrl(card.cardId);
+
+  return `
+    <div class="card-tile" draggable="true" data-cardid="${esc(card.cardId)}" data-section="${section}"
+      onclick="openCardDetail('${esc(card.cardId)}','${section}')">
+      <div class="card-img-wrap">
+        <img src="${imgUrl}" alt="${esc(card.cardId)}"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="card-img-placeholder" style="display:none">🃏</div>
+        <span class="qty-overlay">×${qty}</span>
+        <span class="card-poss-overlay ${possClass}">${poss}/${qty}</span>
+        <div class="card-hover-preview-pop"><img src="${imgUrl}" onerror="this.style.display='none'"></div>
+      </div>
+      <div class="card-info">
+        <div class="card-info-id">${esc(card.cardId)}</div>
+        <div class="card-info-name">${esc(card.cardName || '—')}</div>
+        <div class="card-poss-row">
+          <button class="poss-mini-btn" onclick="event.stopPropagation();changePoss('${esc(card.cardId)}','${section}',-1)">−</button>
+          <span class="poss-val ${possValClass}">${poss}</span>
+          <button class="poss-mini-btn" onclick="event.stopPropagation();changePoss('${esc(card.cardId)}','${section}',1)">+</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════
+//  DRAG & DROP
+// ═══════════════════════════════════════════
+function attachDragEvents(tile, section) {
+  tile.addEventListener('dragstart', e => {
+    dragSrcId = tile.dataset.cardid;
+    dragSrcSection = tile.dataset.section;
+    tile.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', dragSrcId);
+  });
+  tile.addEventListener('dragend', () => tile.classList.remove('dragging'));
+  tile.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    tile.classList.add('drag-over');
+  });
+  tile.addEventListener('dragleave', () => tile.classList.remove('drag-over'));
+  
+  tile.addEventListener('drop', e => {
+    e.preventDefault();
+    tile.classList.remove('drag-over');
+    const targetId = tile.dataset.cardid;
+    const targetSection = tile.dataset.section;
+    if (!dragSrcId || dragSrcId === targetId) return;
+
+    const deck = getActiveDeck();
+    if (!deck) return;
+
+    if (dragSrcSection === 'leader' || targetSection === 'leader') {
+      handleLeaderSwapTile(deck, targetSection, targetId);
+      return;
+    }
+
+    const srcArr = dragSrcSection === 'main' ? deck.cards : (deck.sideCards||[]);
+    const tgtArr = targetSection === 'main' ? deck.cards : (deck.sideCards||[]);
+    const srcIdx = srcArr.findIndex(c=>c.cardId===dragSrcId);
+    if (srcIdx === -1) return;
+    const [card] = srcArr.splice(srcIdx, 1);
+
+    const tgtIdx = tgtArr.findIndex(c=>c.cardId===targetId);
+    tgtArr.splice(tgtIdx>=0?tgtIdx:tgtArr.length, 0, card);
+
+    render(); save();
+  });
+
+  ['gridMain','gridSide'].forEach(gid => {
+    const grid = document.getElementById(gid);
+    if (!grid) return;
+    grid.addEventListener('dragover', e => e.preventDefault());
+    grid.addEventListener('drop', e => {
+      e.preventDefault();
+      const targetSection = gid === 'gridMain' ? 'main' : 'side';
+      if (!dragSrcId || dragSrcSection === targetSection) return;
+      const deck = getActiveDeck();
+      if (!deck) return;
+
+      if (dragSrcSection === 'leader') {
+        const card = deck.leaderCard;
+        if (!card) return;
+        deck.leaderCard = null;
+        card.quantity = card.disableRestriction ? card.quantity : 4; 
+        const tgtArr = targetSection === 'main' ? deck.cards : (deck.sideCards || (deck.sideCards = []));
+        tgtArr.push(card);
+      } else {
+        const srcArr = dragSrcSection==='main' ? deck.cards : (deck.sideCards||[]);
+        const tgtArr = targetSection==='main' ? deck.cards : (deck.sideCards||(deck.sideCards=[]));
+        const srcIdx = srcArr.findIndex(c=>c.cardId===dragSrcId);
+        if (srcIdx===-1) return;
+        const [card] = srcArr.splice(srcIdx,1);
+        tgtArr.push(card);
+      }
+      render(); save();
+    });
+  });
+}
+
+function handleLeaderDrop(e) {
+  e.preventDefault();
+  document.getElementById('leaderSlotZone').classList.remove('drag-over');
+  if (!dragSrcId || dragSrcSection === 'leader') return;
+  const deck = getActiveDeck();
+  if (!deck) return;
+
+  const srcArr = dragSrcSection === 'main' ? deck.cards : (deck.sideCards || []);
+  const idx = srcArr.findIndex(c => c.cardId === dragSrcId);
+  if (idx === -1) return;
+
+  const [card] = srcArr.splice(idx, 1);
+  const previousLeader = deck.leaderCard;
+
+  if (!card.disableRestriction) {
+    card.quantity = 1;
+    if (card.inPossession > 1) card.inPossession = 1;
+  }
+
+  deck.leaderCard = card;
+  if (previousLeader) {
+    previousLeader.quantity = previousLeader.disableRestriction ? previousLeader.quantity : 4;
+    srcArr.push(previousLeader);
+  }
+
+  render(); save();
+}
+
+function handleLeaderSwapTile(deck, targetSection, targetId) {
+  if (dragSrcSection === 'leader') {
+    const card = deck.leaderCard;
+    if (!card) return;
+    deck.leaderCard = null;
+    card.quantity = card.disableRestriction ? card.quantity : 4;
+    const tgtArr = targetSection === 'main' ? deck.cards : (deck.sideCards || []);
+    const tgtIdx = tgtArr.findIndex(c=>c.cardId===targetId);
+    tgtArr.splice(tgtIdx >= 0 ? tgtIdx : tgtArr.length, 0, card);
+  } else {
+    const srcArr = dragSrcSection === 'main' ? deck.cards : (deck.sideCards || []);
+    const srcIdx = srcArr.findIndex(c => c.cardId === dragSrcId);
+    if (srcIdx === -1) return;
+    const [card] = srcArr.splice(srcIdx, 1);
+    const prev = deck.leaderCard;
+    if (!card.disableRestriction) {
+      card.quantity = 1;
+      if (card.inPossession > 1) card.inPossession = 1;
+    }
+    deck.leaderCard = card;
+    if (prev) {
+      prev.quantity = prev.disableRestriction ? prev.quantity : 4;
+      srcArr.push(prev);
+    }
+  }
+  render(); save();
+}
+
+// ═══════════════════════════════════════════
+//  CARD DETAIL MODAL
+// ═══════════════════════════════════════════
+// ... (totes les funcions de la modal de detall es mantenen iguals, cridaran a save() que ara és asíncron)
+function openCardDetail(cardId, section) {
+  const deck = getActiveDeck();
+  if (!deck) return;
+  
+  let card = null;
+  if (section === 'leader') {
+    card = deck.leaderCard;
+  } else {
+    const arr = section==='main' ? deck.cards : (deck.sideCards||[]);
+    card = arr.find(c=>c.cardId===cardId);
+  }
+  if (!card) return;
+  
+  if (card.disableRestriction === undefined) card.disableRestriction = false;
+
+  const imgUrl = cardImageUrl(card.cardId);
+  const poss = card.inPossession||0;
+  const qty = card.quantity||0;
+  let possColor='var(--gray)';
+  if (poss>=qty&&qty>0) possColor='var(--green)';
+  else if (poss>0) possColor='var(--orange)';
+
+  showModal(`
+    <div class="modal-header">
+      <span class="modal-title">${esc(card.cardName||card.cardId)}</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="card-detail-wrap">
+        <div class="card-detail-img-box">
+          <img class="card-detail-img" src="${imgUrl}" alt="${esc(card.cardId)}"
+            onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <div class="card-detail-img-ph" style="display:none">🃏</div>
+        </div>
+        <div class="card-detail-stats">
+          <div class="stat-row"><span class="stat-key">Card ID</span><span class="stat-val" style="font-family:monospace">${esc(card.cardId)}</span></div>
+          <div class="stat-row"><span class="stat-key">Nombre</span><span class="stat-val">${esc(card.cardName||'—')}</span></div>
+          <div class="stat-row"><span class="stat-key">Counter</span><span class="stat-val">${esc(card.counter||'—')}</span></div>
+          <div class="stat-row"><span class="stat-key">Power</span><span class="stat-val">${esc(card.power||'—')}</span></div>
+          <div class="stat-row"><span class="stat-key">Cantidad Mazo</span><span class="stat-val">${qty}</span></div>
+          <div class="stat-row">
+            <span class="stat-key">En Posesión</span>
+            <div class="poss-detail-row">
+              <button class="poss-detail-btn" onclick="changePossDetail('${esc(cardId)}','${section}',-1)">−</button>
+              <span class="poss-detail-val" id="detailPossVal" style="color:${possColor}">${poss}</span>
+              <button class="poss-detail-btn" onclick="changePossDetail('${esc(cardId)}','${section}',1)">+</button>
+            </div>
+          </div>
+          <div class="stat-row">
+            <span class="stat-key">Límites oficiales</span>
+            <span class="stat-val" style="display:flex;align-items:center;gap:4px">
+              <input type="checkbox" id="detailEnforceLimit" ${card.disableRestriction ? '' : 'checked'} onchange="toggleCardRestriction('${esc(cardId)}','${section}',this.checked)">
+              <span style="font-size:12px;color:var(--text-muted)">Activo (Líd: 1 / Mazo: 4)</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" onclick="deleteCard('${esc(cardId)}','${section}');closeModal()">Eliminar</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cerrar</button>
+      <button class="btn btn-primary" onclick="openEditCardModal('${esc(cardId)}','${section}')">✏ Editar</button>
+    </div>
+  `, true);
+}
+
+function toggleCardRestriction(cardId, section, enforceLimit) {
+  const deck = getActiveDeck();
+  if (!deck) return;
+  let card = (section === 'leader') ? deck.leaderCard : (section === 'main' ? deck.cards : (deck.sideCards||[])).find(c=>c.cardId===cardId);
+  if (!card) return;
+
+  card.disableRestriction = !enforceLimit;
+  if(enforceLimit) {
+    const maxVal = (section === 'leader') ? 1 : 4;
+    if(card.quantity > maxVal) card.quantity = maxVal;
+    if(card.inPossession > maxVal) card.inPossession = maxVal;
+  }
+  render(); openCardDetail(cardId, section); save();
+}
+
+function changePossDetail(cardId, section, delta) {
+  const deck = getActiveDeck();
+  let card = null;
+  if (section === 'leader') card = deck.leaderCard;
+  else card = (section === 'main' ? deck.cards : (deck.sideCards||[])).find(c=>c.cardId===cardId);
+  if (!card) return;
+
+  let newPoss = Math.max(0, (card.inPossession || 0) + delta);
+  if (!card.disableRestriction) {
+    const maxVal = (section === 'leader') ? 1 : 4;
+    if (newPoss > maxVal) newPoss = maxVal;
+  }
+
+  card.inPossession = newPoss;
+
+  const el = document.getElementById('detailPossVal');
+  if (el) {
+    const poss=card.inPossession, qty=card.quantity||0;
+    el.textContent = poss;
+    el.style.color = poss>=qty&&qty>0?'var(--green)':poss>0?'var(--orange)':'var(--gray)';
+  }
+  render(); save();
+}
+
+function changePoss(cardId, section, delta) {
+  const deck = getActiveDeck();
+  if (!deck) return;
+  let card = null;
+  if (section === 'leader') card = deck.leaderCard;
+  else card = (section === 'main' ? deck.cards : (deck.sideCards||[])).find(c=>c.cardId===cardId);
+  if (!card) return;
+
+  let newPoss = Math.max(0, (card.inPossession || 0) + delta);
+  if (!card.disableRestriction) {
+    const maxVal = (section === 'leader') ? 1 : 4;
+    if (newPoss > maxVal) newPoss = maxVal;
+  }
+
+  card.inPossession = newPoss;
+  render(); save();
+}
+
+// ═══════════════════════════════════════════
+//  EXPORT FUNCTIONS
+// ═══════════════════════════════════════════
+function exportToClipboard() {
+  const deck = getActiveDeck();
+  if (!deck) { toast('No hay ningún mazo seleccionado'); return; }
+  
+  let lines = [];
+  if (deck.leaderCard && deck.leaderCard.cardId) {
+    lines.push(`1x${deck.leaderCard.cardId}`);
+  }
+  if (deck.cards && deck.cards.length > 0) {
+    deck.cards.forEach(card => {
+      if (card.cardId && card.quantity > 0) {
+        lines.push(`${card.quantity}x${card.cardId}`);
+      }
+    });
+  }
+  if (lines.length === 0) { toast('El mazo está vacío'); return; }
+  
+  const textToCopy = lines.join('\n');
+  navigator.clipboard.writeText(textToCopy)
+    .then(() => { toast('¡Lista copiada al portapapeles! ✓'); })
+    .catch(err => { toast('Error al copiar la lista ✕'); });
+}
+
+function exportMissingToClipboard() {
+  const deck = getActiveDeck();
+  if (!deck) { toast('No hay ningún mazo seleccionado'); return; }
+  
+  let lines = [];
+  
+  if (deck.leaderCard && deck.leaderCard.cardId) {
+    const leaderNeeded = 1;
+    const leaderHave = deck.leaderCard.inPossession || 0;
+    if (leaderHave < leaderNeeded) {
+      lines.push(`1x${deck.leaderCard.cardId}`);
+    }
+  }
+  
+  if (deck.cards && deck.cards.length > 0) {
+    deck.cards.forEach(card => {
+      if (card.cardId) {
+        const needed = card.quantity || 0;
+        const have = card.inPossession || 0;
+        const diff = needed - have;
+        
+        if (diff > 0) {
+          lines.push(`${diff}x${card.cardId}`);
+        }
+      }
+    });
+  }
+  
+  if (lines.length === 0) {
+    toast('¡Tens toutes les cartes en possessió! No falta res ✓');
+    return;
+  }
+  
+  const textToCopy = lines.join('\n');
+  navigator.clipboard.writeText(textToCopy)
+    .then(() => { toast('¡Llista de cartes faltants copiada! ✓'); })
+    .catch(err => { toast('Error al copiar la llista ✕'); });
+}
+
+// ═══════════════════════════════════════════
+//  DECK MODALS
+// ═══════════════════════════════════════════
+function leaderPickerHTML(selected=[]) {
+  return Object.entries(LEADER_COLORS).map(([key,{label,hex}]) => `
+    <button type="button" class="leader-color-btn ${selected.includes(key)?'selected':''}"
+      style="background:${hex}" title="${label}"
+      onclick="toggleLeaderColor(this,'${key}')">
+      <span class="check">✓</span>
+    </button>`).join('');
+}
+
+function toggleLeaderColor(btn, key) {
+  const selected = btn.classList.contains('selected');
+  const allBtns = btn.closest('.leader-picker').querySelectorAll('.leader-color-btn');
+  const selectedKeys = [...allBtns].filter(b=>b.classList.contains('selected')).map(b=>b.dataset.key||b.getAttribute('onclick').match(/'(\w+)'\)/)[1]);
+  if (selected) {
+    if (selectedKeys.length > 1) btn.classList.remove('selected');
+  } else {
+    if (selectedKeys.length < 2) btn.classList.add('selected');
+    else toast('Máximo 2 colores');
+  }
+}
+
+function getSelectedLeaderColors(pickerId) {
+  const picker = document.getElementById(pickerId);
+  return [...picker.querySelectorAll('.leader-color-btn.selected')].map(b => {
+    const m = b.getAttribute('onclick').match(/'(\w+)'\)/);
+    return m ? m[1] : null;
+  }).filter(Boolean);
+}
+
+function openNewDeckModal() {
+  showModal(`
+    <div class="modal-header">
+      <span class="modal-title">Nuevo mazo</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nombre del mazo</label>
+        <input class="form-input" id="newDeckName" placeholder="ej: Luffy Rojo OP09" autofocus onkeydown="if(event.key==='Enter') createDeck()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Colores del líder (1 o 2)</label>
+        <div class="leader-picker" id="newLeaderPicker">${leaderPickerHTML()}</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="createDeck()">Crear mazo</button>
+    </div>
+  `);
+  document.getElementById('newDeckName').focus();
+}
+
+function createDeck() {
+  const name = document.getElementById('newDeckName').value.trim();
+  if (!name) { toast('Escribe un nombre'); return; }
+  const leaderColors = getSelectedLeaderColors('newLeaderPicker');
+  if (!leaderColors.length) { toast('Selecciona al menos un color'); return; }
+  const deck = {
+    id:'deck_'+Date.now(), name, leaderColors,
+    cards:[], sideCards:[], leaderCard: null
+  };
+  state.decks.push(deck);
+  state.activeDeckId = deck.id;
+  closeModal(); render(); save();
+  toast('Mazo creado ✓');
+}
+
+function openEditDeckModal(deckId) {
+  const deck = state.decks.find(d=>d.id===deckId);
+  if (!deck) return;
+  showModal(`
+    <div class="modal-header">
+      <span class="modal-title">Editar mazo</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nombre</label>
+        <input class="form-input" id="editDeckName" value="${esc(deck.name)}" onkeydown="if(event.key==='Enter') saveEditDeck('${deckId}')">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Colores del líder</label>
+        <div class="leader-picker" id="editLeaderPicker">${leaderPickerHTML(deck.leaderColors||[])}</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEditDeck('${deckId}')">Guardar</button>
+    </div>
+  `);
+}
+
+function saveEditDeck(deckId) {
+  const deck = state.decks.find(d=>d.id===deckId);
+  if (!deck) return;
+  const name = document.getElementById('editDeckName').value.trim();
+  const colors = getSelectedLeaderColors('editLeaderPicker');
+  if (!name) { toast('Escribe un nombre'); return; }
+  if (!colors.length) { toast('Selecciona al menos un color'); return; }
+  deck.name = name;
+  deck.leaderColors = colors;
+  closeModal(); render(); save();
+  toast('Mazo actualizado ✓');
+}
+
+function confirmDeleteDeck(deckId) {
+  const deck = state.decks.find(d=>d.id===deckId);
+  if (!deck) return;
+  showModal(`
+    <div class="modal-header">
+      <span class="modal-title">Eliminar mazo</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-muted)">¿Eliminar <strong style="color:var(--text)">${esc(deck.name)}</strong>? No se puede deshacer.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-danger" onclick="deleteDeck('${deckId}')">Eliminar</button>
+    </div>
+  `);
+}
+
+function deleteDeck(deckId) {
+  state.decks = state.decks.filter(d=>d.id!==deckId);
+  if (state.activeDeckId===deckId) state.activeDeckId = state.decks.length?state.decks[0].id:null;
+  closeModal(); render(); save();
+  toast('Mazo eliminado');
+}
+
+function cardFormHTML(card={}) {
+  const disableRest = card.disableRestriction || false;
+  return `
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Card ID *</label>
+        <input class="form-input" id="fCardId" value="${esc(card.cardId||'')}" placeholder="ej: OP16-002">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Quantity</label>
+        <input class="form-input" type="number" id="fQty" value="${card.quantity||1}" min="1">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Card Name</label>
+      <input class="form-input" id="fName" value="${esc(card.cardName||'')}" placeholder="Nombre de la carta">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Counter</label>
+        <input class="form-input" id="fCounter" value="${esc(card.counter||'')}" placeholder="ej: 1000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Power</label>
+        <input class="form-input" id="fPower" value="${esc(card.power||'')}" placeholder="ej: 5000">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">In Possession</label>
+      <input class="form-input" type="number" id="fPoss" value="${card.inPossession||0}" min="0">
+    </div>
+    <div class="form-group" style="margin-top:10px">
+      <label class="form-label" style="display:inline-flex;align-items:center;gap:6px;text-transform:none">
+        <input type="checkbox" id="fDisableRestriction" ${disableRest ? 'checked' : ''}> Ignorar restricción de copias por mazo
+      </label>
+    </div>`;
+}
+
+function openAddCardModal(section) {
+  const deck = getActiveDeck();
+  if (!deck) return;
+  showModal(`
+    <div class="modal-header">
+      <span class="modal-title">Añadir carta ${section==='side'?'(Adicional)':''}</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">${cardFormHTML()}</div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="addCard('${section}')">Añadir</button>
+    </div>
+  `);
+  setTimeout(()=>document.getElementById('fCardId').focus(),50);
+}
+
+function addCard(section) {
+  const deck = getActiveDeck();
+  if (!deck) return;
+  const arr = section==='main' ? deck.cards : (deck.sideCards||(deck.sideCards=[]));
+  const cardId = document.getElementById('fCardId').value.trim().toUpperCase();
+  if (!cardId) { toast('El Card ID es obligatorio'); return; }
+  if (arr.find(c=>c.cardId===cardId)) { toast('Esta carta ya existe'); return; }
+  
+  const disableRest = document.getElementById('fDisableRestriction').checked;
+  let qty = parseInt(document.getElementById('fQty').value)||1;
+  let poss = parseInt(document.getElementById('fPoss').value)||0;
+
+  if(!disableRest) {
+    const limit = (section === 'leader') ? 1 : 4;
+    if (qty > limit) qty = limit;
+    if (poss > limit) poss = limit;
+  }
+
+  arr.push({
+    cardId,
+    cardName:document.getElementById('fName').value.trim(),
+    quantity:qty,
+    counter:document.getElementById('fCounter').value.trim(),
+    power:document.getElementById('fPower').value.trim(),
+    inPossession:poss,
+    disableRestriction: disableRest
+  });
+  closeModal(); render(); save();
+  toast('Carta añadida ✓');
+}
+
+function openEditCardModal(cardId, section) {
+  const deck = getActiveDeck();
+  let card = null;
+  if(section === 'leader') card = deck.leaderCard;
+  else card = (section==='main'?deck.cards:(deck.sideCards||[])).find(c=>c.cardId===cardId);
+  if (!card) return;
+
+  document.getElementById('modalContainer').innerHTML = '';
+  showModal(`
+    <div class="modal-header">
+      <span class="modal-title">Editar carta</span>
+      <button class="modal-close" onclick="openCardDetail('${esc(cardId)}','${section}')">✕</button>
+    </div>
+    <div class="modal-body">${cardFormHTML(card)}</div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="openCardDetail('${esc(cardId)}','${section}')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveCard('${esc(cardId)}','${section}')">Guardar</button>
+    </div>
+  `);
+}
+
+function saveCard(oldCardId, section) {
+  const deck = getActiveDeck();
+  let card = null;
+  if(section === 'leader') card = deck.leaderCard;
+  else card = (section==='main'?deck.cards:(deck.sideCards||[])).find(c=>c.cardId===oldCardId);
+  if (!card) return;
+
+  const newId = document.getElementById('fCardId').value.trim().toUpperCase();
+  if (!newId) { toast('El Card ID es obligatorio'); return; }
+  
+  const disableRest = document.getElementById('fDisableRestriction').checked;
+  let qty = parseInt(document.getElementById('fQty').value)||1;
+  let poss = parseInt(document.getElementById('fPoss').value)||0;
+
+  if(!disableRest) {
+    const limit = (section === 'leader') ? 1 : 4;
+    if (qty > limit) qty = limit;
+    if (poss > limit) poss = limit;
+  }
+
+  card.cardId=newId;
+  card.cardName=document.getElementById('fName').value.trim();
+  card.quantity=qty;
+  card.counter=document.getElementById('fCounter').value.trim();
+  card.power=document.getElementById('fPower').value.trim();
+  card.inPossession=poss;
+  card.disableRestriction = disableRest;
+
+  closeModal(); render(); save();
+  openCardDetail(newId, section);
+  toast('Carta actualizada ✓');
+}
+
+function deleteCard(cardId, section) {
+  const deck = getActiveDeck();
+  if (!deck) return;
+  if (section === 'leader') deck.leaderCard = null;
+  else if (section==='main') deck.cards=deck.cards.filter(c=>c.cardId!==cardId);
+  else deck.sideCards=(deck.sideCards||[]).filter(c=>c.cardId!==cardId);
+  render(); save();
+  toast('Carta eliminada');
+}
+
+// ═══════════════════════════════════════════
+//  BULK ADD MODAL
+// ═══════════════════════════════════════════
+function openBulkModal(section) {
+  showModal(`
+    <div class="modal-header">
+      <span class="modal-title">Añadir lista de cartas ${section==='side'?'(Adicional)':''}</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Pega tu lista (formato: 4xOP09-090)</label>
+        <textarea class="form-textarea" id="bulkText" placeholder="1xOP09-081&#10;4xOP09-090&#10;4xOP09-089&#10;4xOP09-095"></textarea>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted)">Las cartas duplicadas se omitirán. In Possession se pondrá a 0.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="addBulkCards('${section}')">Añadir cartas</button>
+    </div>
+  `);
+  setTimeout(()=>document.getElementById('bulkText').focus(),50);
+}
+
+function addBulkCards(section) {
+  const deck = getActiveDeck();
+  if (!deck) return;
+  const arr = section==='main' ? deck.cards : (deck.sideCards||(deck.sideCards=[]));
+  const text = document.getElementById('bulkText').value;
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  let added=0, skipped=0;
+  lines.forEach(line => {
+    const m = line.match(/^(\d+)\s*[xX]\s*([A-Za-z0-9]+-[A-Za-z0-9]+)/);
+    if (!m) { skipped++; return; }
+    let qty = parseInt(m[1])||1;
+    const cardId = m[2].toUpperCase();
+    if (arr.find(c=>c.cardId===cardId)) { skipped++; return; }
+    
+    if (qty > 4) qty = 4;
+
+    arr.push({ cardId, cardName:'', quantity:qty, counter:'', power:'', inPossession:0, disableRestriction:false });
+    added++;
+  });
+  closeModal(); render(); save();
+  toast(`${added} cartas añadidas${skipped?`, ${skipped} omitidas`:''}`);
+}
+
+// ═══════════════════════════════════════════
+//  IMPORT / EXPORT
+// ═══════════════════════════════════════════
+function exportData() {
+  const blob = new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'op_tracker_backup.json';
+  a.click();
+  toast('Backup exportado ✓');
+}
+
+function importData() { document.getElementById('importFile').click(); }
+
+function handleImport(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.decks) { 
+        state=data; 
+        updateGridZoomStyle(); 
+        render(); 
+        await save();
+        toast('Datos importados ✓'); 
+      }
+      else toast('Archivo inválido');
+    } catch { toast('Error al leer el archivo'); }
+  };
+  reader.readAsText(file);
+  e.target.value='';
+}
+
+// ═══════════════════════════════════════════
+//  MODAL HELPERS
+// ═══════════════════════════════════════════
+function showModal(html, isLg = false) {
+  document.getElementById('modalContainer').innerHTML =
+    `<div class="modal-overlay" onclick="handleOverlayClick(event)"><div class="modal ${isLg ? 'modal-lg' : ''}">${html}</div></div>`;
+}
+
+function handleOverlayClick(e) { if (e.target.classList.contains('modal-overlay')) closeModal(); }
+function closeModal() { document.getElementById('modalContainer').innerHTML=''; }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+
+// ═══════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════
+function toast(msg) {
+  const tc = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className='toast'; t.textContent=msg;
+  tc.appendChild(t);
+  setTimeout(()=>t.remove(),3000);
+}
+
+// ═══════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ═══════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════
+load(); // Executa la càrrega asíncrona des de Mongo
+fetchFromGitHub(); 
+</script>
+</body>
+</html>
